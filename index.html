@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<!--
+	Forty by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+	<link rel="stylesheet" href="assets/css/main.css" />
+	<noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+  <title>Cem Uğuz – Computational Physicist</title>  
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      /* overflow: hidden; */ /* bu satırı kaldır */
+      overflow-x: hidden;     /* sadece yatay scroll'u kapatmak için */
+      overflow-y: auto;       /* dikey scroll çalışsın */
+      height: 100%;
+      background-color: #000014;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: white;
+    }
+
+    canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 0;
+    }
+    #bg {
+      opacity: 0;
+      transition: opacity 1.5s ease;
+      }
+    
+    body:not(.is-preload) #bg {
+      opacity: 1;
+      }
+  </style>
+</head>
+<body class="is-preload">
+  
+  <!-- Wrapper -->
+			<div id="wrapper">
+
+        <canvas id="bg"></canvas>
+
+   <script>
+    const canvas = document.getElementById("bg");
+    const ctx = canvas.getContext("2d");
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+    let devicePixelRatio = window.devicePixelRatio || 1;
+    canvas.width = width * devicePixelRatio;
+    canvas.height = height * devicePixelRatio;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    const MOUSE_RADIUS = 100;
+    const EPS = 1, SIG = 5;
+    const MAX_DIST = 65;
+    let particles = [];
+    function getParticleCount() {
+      const area = width * height;
+      return Math.floor(area * 0.00055); // Yoğunluk: 0.00055 parçacık / px²
+    }
+    let mouse = { x: width / 2, y: height / 2 };
+    window.onpointermove = e => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    };
+    const palette = [200, 210, 240, 270, 300, 330, 0, 30, 45];
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+    class Particle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = this.vy = 0;
+        //this.r = 1.5 + Math.random() * 3;
+        this.r = Math.random()*5.0 + Math.random() * 3;
+        this.baseRadius = this.r; // Store original radius for scaling
+        this.hue = pick(palette);
+        this.alpha = 0.90 + Math.random() * 0.5;
+        this.baseAlpha = this.alpha; // Store base alpha for sparkle effect
+        
+        // Parıldama efekt özellikleri
+        this.hasConnection = false;
+        this.sparkle = 0;
+        this.sparkleDirection = 1;
+        this.sparkleSpeed = 0.05 + Math.random() * 0.05;
+      }
+      update() {
+        let fx = 0, fy = 0;
+        for (const other of particles) {
+          if (other === this) continue;
+          const dx = this.x - other.x;
+          const dy = this.y - other.y;
+          const r = Math.hypot(dx, dy) || 1;
+          const f = 24 * EPS * (2 * (SIG ** 12 / r ** 13) - (SIG ** 6 / r ** 7));
+          fx += f * dx / r;
+          fy += f * dy / r;
+        }
+        const mx = this.x - mouse.x;
+        const my = this.y - mouse.y;
+        const distMouse = Math.hypot(mx, my);
+        if (distMouse < MOUSE_RADIUS) {
+          const f = (MOUSE_RADIUS - distMouse) * 0.01;
+          fx += f * mx / distMouse;
+          fy += f * my / distMouse;
+        }
+        this.vx = (this.vx + fx) * 0.92;
+        this.vy = (this.vy + fy) * 0.92;
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.x < 0 || this.x > width) this.vx *= -1;
+        if (this.y < 0 || this.y > height) this.vy *= -1;
+        
+        // Parıldama efektini güncelle
+        if (this.hasConnection) {
+          this.sparkle += this.sparkleSpeed * this.sparkleDirection;
+          if (this.sparkle >= 1) {
+            this.sparkle = 1;
+            this.sparkleDirection = -1;
+          } else if (this.sparkle <= 0) {
+            this.sparkle = 0;
+            this.sparkleDirection = 1;
+          }
+        } else {
+          // Bağlantı yoksa parıldamayı azalt
+          this.sparkle *= 0.9;
+        }
+      }
+      draw() {
+        // Parıldama efektini uygula
+        const sparkleAlpha = this.sparkle * 0.9;
+        const alpha = Math.min(1, this.alpha + sparkleAlpha);
+
+        // Küre gövdesi (gradient ile 3D görünüm)
+        const grad = ctx.createRadialGradient(
+          this.x - this.r * 0.4, this.y - this.r * 0.4, this.r * 0.2, // ışık merkezi
+          this.x, this.y, this.r                                   // dış kenar
+        );
+        grad.addColorStop(0, `hsla(${this.hue}, 75%, 80%, ${alpha})`); // aydınlık nokta
+        grad.addColorStop(1, `hsla(${this.hue}, 75%, 40%, ${alpha})`); // gölge
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Ek parlama efekti (sparkle yüksekse)
+        if (this.sparkle > 0.7) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.r * 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${this.hue}, 100%, 80%, ${(this.sparkle - 0.7) * 0.3})`;
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+    function createParticles(count) {
+      particles = [];
+      for (let i = 0; i < count; i++) {
+        particles.push(new Particle(Math.random() * width, Math.random() * height));
+      }
+    }
+    function drawConnections() {
+      // Reset connection flags
+      for (const p of particles) {
+        p.hasConnection = false;
+      }
+      
+      for (let i = 0; i < particles.length; i++) {
+        const p1 = particles[i];
+        for (let j = i + 1; j < particles.length; j++) {
+          const p2 = particles[j];
+          const dx = p1.x - p2.x;
+          const dy = p1.y - p2.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < MAX_DIST) {
+            // Mark both particles as having a connection
+            p1.hasConnection = true;
+            p2.hasConnection = true;
+            
+            const alpha = 0.95 * (1 - dist / MAX_DIST);
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = `hsla(${(p1.hue + p2.hue) / 2}, 75%, 70%, ${alpha})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      }
+    }
+    function animate() {
+      ctx.clearRect(0, 0, width, height);
+      for (const p of particles) {
+        p.update();
+        p.draw();
+      }
+      drawConnections();
+      requestAnimationFrame(animate);
+    }
+    createParticles(getParticleCount());
+    animate();
+    window.addEventListener('resize', () => {
+      const oldWidth = width;
+      const oldHeight = height;
+      width = window.innerWidth;
+      height = window.innerHeight;
+      devicePixelRatio = window.devicePixelRatio || 1;
+      canvas.width = width * devicePixelRatio;
+      canvas.height = height * devicePixelRatio;
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      const scaleX = width / oldWidth;
+      const scaleY = height / oldHeight;
+      // Pozisyonları ölçekle
+      for (const p of particles) {
+        p.x *= scaleX;
+        p.y *= scaleY;
+      }
+      mouse.x *= scaleX;
+      mouse.y *= scaleY;
+      // Partikül sayısını hedefe göre ayarla
+      const targetCount = getParticleCount();
+      const diff = targetCount - particles.length;
+      if (diff > 0) {
+        // Eksikse yeni partiküller ekle
+        for (let i = 0; i < diff; i++) {
+          particles.push(new Particle(Math.random() * width, Math.random() * height));
+        }
+      } else if (diff < 0) {
+        // Fazlaysa kırp
+        particles.splice(diff);
+      }
+    });
+  </script>
+
+				<!-- Header -->
+					<header id="header" class="alt">
+						<!-- <a href="index.html" class="logo"><strong>Forty</strong> <span>by HTML5 UP</span></a> -->
+						<nav>
+							<a href="#menu">Menu</a>
+						</nav>
+					</header>
+
+				<!-- Menu -->
+					<nav id="menu">
+						<ul class="links">
+							<li><a href="index.html">Home</a></li>
+							<li><a href="resume.html">Resume</a></li>
+							<li><a href="publications.html">Publications</a></li>
+						</ul>
+						<ul class="actions stacked">
+							<li><a href="#contact" class="button primary fit">CONTACT</a></li>
+						</ul>
+					</nav>
+
+				<!-- Banner -->
+					<section id="banner" class="major">
+						<div class="inner">
+							<header class="major">
+								<h1>Hello, my name is Cem</h1>
+							</header>
+							<div class="content">
+								<p>Bridging physics and biology to transform drug discovery through </br>high-precision computation.</p>
+								<ul class="actions">
+									<li><a href="#one" class="button next scrolly">Get To Know Me</a></li>
+								</ul>
+							</div>
+						</div>
+					</section>
+
+				<!-- Main -->
+					<div id="main">
+
+						<!-- One -->
+							<section id="one" class="tiles">
+								<article>
+									<!--<span class="image">
+										<img src="images/nordic_ai.jpeg" alt="" />
+									</span>-->
+									<header class="major">
+										<h3><a href="about.html" class="link">About Me</a></h3>
+										<p>Evolution of My Research</p>
+									</header>
+								</article>
+								
+								<article>
+									<!--<span class="image">
+										<img src="images/molecule_2.png" alt="" />
+									</span>-->
+									<header class="major">
+										<h3><a href="index.html" class="link">Physics-informed Generative AI</a></h3>
+										<p>Generating Solutions that Obey Nature’s Laws<br><em>(Content coming soon)</em></p>
+									</header>
+								</article>
+								
+								<article>
+									<!--<span class="image">
+										<img src="images/papers4.png" alt="" />
+									</span>-->
+									<header class="major">
+										<h3><a href="publications.html" class="link">Publications</a></h3>
+										<p>Papers, Manuscripts, and More</p>
+									</header>
+								</article>
+
+                <article>
+									<!--<span class="image">
+										<img src="images/molecule_2.png" alt="" />
+									</span>-->
+									<header class="major">
+										<h3><a href="https://github.com/cemuguz-lab/MolPrism-Molecular-Clustering-and-Analysis-Toolkit" target="_blank" class="link">MolPrism <span class="icon brands fa-github"></span></a></h3>
+										<p>Molecular Clustering and Visualization Toolkit</p>
+									</header>
+								</article>
+								
+								<article>
+									<!--<span class="image">
+										<img src="images/papers4.png" alt="" />
+									</span>-->
+									<header class="major">
+										<h3><a href="https://github.com/cemuguz-lab/CAGE-ConformerTool" target="_blank" class="link">CAGE <span class="icon brands fa-github"></span></a></h3>
+										<p>Conformer generation and grid filtering tool</p>
+									</header>
+								</article>
+							</section>
+
+
+
+						<!-- Two -->
+							<section id="two">
+								<div class="inner">
+									<header class="major">
+										<h2>Working Together</h2>
+									</header>
+									<p>With the end of my PhD, an interesting period in my professional life has risen at the horizon. In the next stage of my career, I aim to work with a resilient, curious and talented team of researchers, engineers, and investors to make focussed breakthroughs in specific and actionable areas of the life sciences. If you recognize yourself in the above goals and feel excited to join in this big and ambitious adventure, you can reach out to me below. </p>
+								</div>
+							</section>
+					</div>
+      
+      <!-- Contact -->
+				<section id="contact">
+					<div class="inner">
+						<section>
+							<section>
+								<div class="contact-method">
+									<span class="icon solid alt fa-envelope"></span>
+									<h3>Email</h3>
+									<span>cemuguzlab[at]gmail[dot]com</span>
+								</div>
+                <span>Whether you are interested in computational drug design, molecular dynamics, or AI in life sciences, feel free to reach out. I’m always happy to connect and discuss exciting ideas!</span>
+							</section>
+						</section>
+						<section class="split">
+							<section>
+								<div class="contact-method">
+									<span class="icon solid alt fa-home"></span>
+									<h3>Address</h3>
+                  <h3>Computational Drug Design Center (HITMER)</h3>
+									<span>Bahçeşehir University, School of Pharmacy Department of Pharmaceutical Chemistry </br>İstanbul/Türkiye</span>
+								</div>
+							</section>
+							<section>
+								<ul class="icons">
+									<li><a href="https://github.com/cemuguz-lab" class="icon brands alt fa-github"><span class="label">GitHub</span></a></li>
+                  <li><a href="https://www.instagram.com/promdcalc/" class="icon brands alt fa-instagram"><span class="label">Instagram</span></a></li>
+									<!--<li><a href="https://www.linkedin.com/in/jonas-verhellen-634bba12b/" class="icon brands alt fa-linkedin-in"><span class="label">LinkedIn</span></a></li>-->
+								</ul>		
+							</section>
+						</section>
+					</div>
+				</section>
+      
+			<!-- Footer -->
+				<footer id="footer">
+					<div class="inner">
+						<ul class="copyright">
+							<li>&copy; Cem UĞUZ</li><li>Design: <a href="https://html5up.net">HTML5 UP</a></li>
+						</ul>
+					</div>
+				</footer>
+
+		</div>
+
+		<!-- Scripts -->
+			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/jquery.scrolly.min.js"></script>
+			<script src="assets/js/jquery.scrollex.min.js"></script>
+			<script src="assets/js/browser.min.js"></script>
+			<script src="assets/js/breakpoints.min.js"></script>
+			<script src="assets/js/util.js"></script>
+			<script src="assets/js/main.js"></script>
+
+
+</body>
+</html>
