@@ -62,10 +62,16 @@
     const EPS = 1, SIG = 5;
     const MAX_DIST = 65;
     let particles = [];
+
+    const MAX_PARTICLES = 1200; // Maksimum sınır ekle
     function getParticleCount() {
       const area = width * height;
-      return Math.floor(area * 0.00055); // Yoğunluk: 0.00055 parçacık / px²
+      return Math.min(Math.floor(area * 0.00055), MAX_PARTICLES);
     }
+    // function getParticleCount() {
+    //   const area = width * height;
+    //   return Math.floor(area * 0.00055); // Yoğunluk: 0.00055 parçacık / px²
+    // }
     let mouse = { x: width / 2, y: height / 2 };
     window.onpointermove = e => {
       mouse.x = e.clientX;
